@@ -1,0 +1,14 @@
+{
+    "bg": "#192330",
+    "surface": "#212e3f",
+    "muted": "#858a8f",
+    "fg": "#cdcecf",
+    "fgBright": "#e4e4e5",
+    "accent": "#81b29a",
+    "blue": "#719cd6",
+    "red": "#c94f6d",
+    "green": "#81b29a",
+    "yellow": "#dbc074",
+    "orange": "#f4a261",
+    "purple": "#9d79d6"
+}
