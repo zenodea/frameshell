@@ -6,9 +6,22 @@ opens out of it: the bar along the top, a dashboard and notification drawer on
 the left, a control centre and agent chat on the right, and a launcher along
 the bottom. The lock screen is the same frame closing over the desktop.
 
-![frameshell demo](assets/demo.webp)
+[![frameshell demo](assets/demo.webp)](assets/demo.mp4)
 
-The same clip as a [video](assets/demo.mp4).
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/desktop.webp" alt="Desktop"><br><sub>The frame and bar over the desktop</sub></td>
+    <td width="50%"><img src="assets/screenshots/dashboard.webp" alt="Dashboard"><br><sub>Drawer: dashboard</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/control-center.webp" alt="Control centre"><br><sub>Control centre</sub></td>
+    <td width="50%"><img src="assets/screenshots/agent.webp" alt="Agent"><br><sub>Control centre, agent tab</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/theme-picker.webp" alt="Theme picker"><br><sub>Launcher, themes tab</sub></td>
+    <td width="50%"><img src="assets/screenshots/lock.webp" alt="Lock screen"><br><sub>Lock screen</sub></td>
+  </tr>
+</table>
 
 ## Requirements
 
@@ -36,7 +49,7 @@ Everything else is optional; a feature hides itself when its tool is missing.
 ## Install
 
 ```sh
-git clone <this repo> ~/.config/quickshell/frameshell
+git clone https://github.com/zenodea/frameshell ~/.config/quickshell/frameshell
 qs -c frameshell
 ```
 
@@ -139,7 +152,8 @@ in the panel. `Ctrl S` opens its settings, `Ctrl H` the session history and
 | `scripts/` | shell helpers, grouped like the services that call them |
 | `themes/` | the bundled colour themes |
 | `examples/` | Hyprland and hypridle snippets |
-| `assets/` | the demo clip |
+| `assets/` | the demo clip and screenshots |
+| `site/` | the landing page; `site/build.sh` assembles it for GitHub Pages |
 
 ## Where things are kept
 

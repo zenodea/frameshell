@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="en" class="booting">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>frameshell</title>
+<meta name="description" content="A desktop shell for Hyprland, built on Quickshell. A frame wraps the screen and everything opens out of it.">
+<meta property="og:title" content="frameshell">
+<meta property="og:description" content="A desktop shell for Hyprland. A frame wraps the screen and everything opens out of it.">
+<meta property="og:image" content="assets/screenshots/desktop.webp">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg: #282a36;
+    --surface: #343746;
+    --muted: #909194;
+    --fg: #f8f8f2;
+    --fgBright: #ffffff;
+    --accent: #bd93f9;
+    --blue: #8be9fd;
+    --red: #ff5555;
+    --green: #50fa7b;
+    --yellow: #f1fa8c;
+    --orange: #ffb86c;
+    --purple: #ff79c6;
+
+    --strip: 8px;
+    --bar: 36px;
+    --radius: 10px;
+    --ease: cubic-bezier(0.23, 1, 0.32, 1);
+    --border: color-mix(in srgb, var(--fg) 12%, transparent);
+    color-scheme: dark;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+body {
+    background: var(--bg);
+    color: var(--fg);
+    font: 13px/1.6 "JetBrains Mono", ui-monospace, monospace;
+    overflow: hidden;
+    transition: background-color 0.4s, color 0.4s;
+}
+
+a { color: inherit; }
+::selection { background: var(--accent); color: var(--bg); }
+
+/* ---- frame ---- */
+
+.bar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: var(--bar);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 calc(var(--strip) + 6px);
+    z-index: 10;
+    transition: opacity 0.4s var(--ease);
+}
+
+.bar > * { min-width: 0; }
+
+.workspaces { display: flex; gap: 2px; }
+
+.workspaces a {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 26px;
+    height: 24px;
+    padding: 0 6px;
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.workspaces a span { display: none; margin-left: 6px; }
+.workspaces a:hover { color: var(--fg); }
+.workspaces a.active { color: var(--fgBright); }
+.workspaces a.active span { display: inline; }
+
+.workspaces a::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: 0;
+    height: 2px;
+    background: var(--accent);
+    transform: scaleX(0);
+    transition: transform 0.3s var(--ease);
+}
+
+.workspaces a.active::after { transform: scaleX(1); }
+
+.clock { color: var(--fgBright); font-weight: 700; letter-spacing: 0.04em; }
+
+.status { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+
+.status button, .status a {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 24px;
+    padding: 0 8px;
+    background: none;
+    border: 0;
+    color: var(--fg);
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.status button:hover, .status a:hover { color: var(--accent); }
+.status svg { width: 14px; height: 14px; fill: currentColor; }
+.dot { width: 8px; height: 8px; background: var(--accent); transition: background-color 0.4s; }
+
+.wall, .screen {
+    position: fixed;
+    inset: var(--bar) var(--strip) var(--strip) var(--strip);
+    border-radius: var(--radius);
+    clip-path: inset(0 round var(--radius));
+    transition: clip-path 0.9s var(--ease);
+}
+
+.wall { overflow: hidden; background: var(--bg); }
+
+.wall div {
+    position: absolute;
+    inset: 0;
+    background: center / cover no-repeat;
+}
+
+/* the same wipe as scripts/config/wallpaper.sh: --transition-type wipe --transition-duration 1 */
+.wall div.wipe {
+    -webkit-mask: linear-gradient(225deg, #000 48%, transparent 52%) 0 100% / 300% 300% no-repeat;
+    mask: linear-gradient(225deg, #000 48%, transparent 52%) 0 100% / 300% 300% no-repeat;
+    animation: wipe 1s ease-in-out forwards;
+}
+
+@keyframes wipe {
+    to { -webkit-mask-position: 100% 0; mask-position: 100% 0; }
+}
+
+.screen {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    background: linear-gradient(color-mix(in srgb, var(--bg) 50%, transparent), color-mix(in srgb, var(--bg) 90%, transparent) 70%);
+    box-shadow: inset 0 0 36px rgba(0, 0, 0, 0.2);
+}
+
+.booting .wall, .booting .screen,
+.locked .wall, .locked .screen { clip-path: inset(50% 50% round var(--radius)); }
+.locked .bar { opacity: 0; pointer-events: none; }
+
+/* ---- content ---- */
+
+main { width: min(1080px, 100% - 48px); margin: 0 auto; }
+
+section { padding: 96px 0; }
+
+.eyebrow { color: var(--muted); margin-bottom: 18px; }
+.eyebrow b { color: var(--accent); font-weight: 500; }
+
+h2 {
+    color: var(--fgBright);
+    font-size: clamp(24px, 3.4vw, 36px);
+    line-height: 1.15;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 14px;
+}
+
+.lede { max-width: 58ch; color: var(--fg); opacity: 0.85; }
+
+.hero {
+    min-height: calc(82vh - var(--bar));
+    min-height: calc(82svh - var(--bar));
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 64px 0 24px;
+}
+
+.hero > * { max-width: 100%; }
+
+.prompt { color: var(--muted); margin-bottom: 20px; }
+.prompt .user { color: var(--green); }
+.prompt .cmd { color: var(--fg); }
+
+.cursor {
+    display: inline-block;
+    width: 0.6em;
+    height: 1.15em;
+    vertical-align: text-bottom;
+    background: var(--accent);
+    animation: blink 1.1s steps(1) infinite;
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+h1 {
+    color: var(--fgBright);
+    font-size: clamp(48px, 11vw, 132px);
+    line-height: 0.95;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    margin-left: -0.04em;
+}
+
+h1 .tail { color: var(--accent); transition: color 0.4s; }
+
+.tagline {
+    max-width: 62ch;
+    margin-top: 28px;
+    font-size: clamp(14px, 1.6vw, 17px);
+    color: var(--fg);
+}
+
+.tagline em { font-style: normal; color: var(--fgBright); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 36px; }
+
+.copy {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 11px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background-color 0.4s;
+}
+
+.copy code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.copy code::before { content: "$ "; color: var(--muted); }
+.copy .hint { color: var(--muted); flex-shrink: 0; }
+.copy:hover { border-color: var(--accent); }
+.copy.done .hint { color: var(--green); }
+
+.button {
+    display: flex;
+    align-items: center;
+    padding: 11px 18px;
+    background: var(--accent);
+    color: var(--bg);
+    font-weight: 700;
+    text-decoration: none;
+    transition: filter 0.15s, background-color 0.4s;
+}
+
+.button:hover { filter: brightness(1.1); }
+
+.keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+    margin-top: 48px;
+    color: var(--muted);
+}
+
+kbd {
+    display: inline-block;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    color: var(--fg);
+    font: inherit;
+    font-size: 11px;
+    line-height: 18px;
+}
+
+/* ---- demo ---- */
+
+.window {
+    margin-top: 36px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.6);
+    transition: background-color 0.4s;
+}
+
+.window-bar {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 12px;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.window video, .window img { display: block; width: 100%; height: auto; }
+
+/* ---- panels ---- */
+
+.panels {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    gap: 32px;
+    margin-top: 40px;
+    align-items: start;
+}
+
+.edges { list-style: none; display: grid; gap: 2px; }
+
+.edges button {
+    display: grid;
+    grid-template-columns: 34px 1fr auto;
+    gap: 12px;
+    align-items: center;
+    width: 100%;
+    padding: 12px;
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--muted);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.edges button:hover { color: var(--fg); background: color-mix(in srgb, var(--surface) 50%, transparent); }
+
+.edges button[aria-selected="true"] {
+    color: var(--fgBright);
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+.edges .name { font-weight: 700; }
+.edges .where { display: block; font-size: 11px; color: var(--muted); font-weight: 400; }
+
+/* a tiny screen showing which edge the panel opens from */
+.map {
+    position: relative;
+    width: 34px;
+    height: 22px;
+    border: 1px solid currentColor;
+    opacity: 0.6;
+}
+
+.map i { position: absolute; background: var(--accent); opacity: 0; transition: opacity 0.2s; }
+.map .t { inset: 0 0 auto 0; height: 4px; }
+.map .l { inset: 0 auto 0 0; width: 9px; }
+.map .r { inset: 0 0 0 auto; width: 9px; }
+.map .b { inset: auto 0 0 0; height: 7px; }
+.map .f { inset: 0; }
+
+[aria-selected="true"] .map { opacity: 1; }
+[data-edge="t"] .map .t, [data-edge="l"] .map .l, [data-edge="r"] .map .r,
+[data-edge="b"] .map .b, [data-edge="f"] .map .f { opacity: 1; }
+
+.detail .window { margin-top: 0; }
+
+/* screenshots come in 16:9 and 3:2, so fit them all in one 16:9 box */
+.shots { position: relative; aspect-ratio: 16 / 9; }
+
+.window .shots img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 0.35s var(--ease);
+}
+
+.shots img.on { opacity: 1; }
+
+.caption { margin-top: 16px; max-width: 62ch; min-height: 3.2em; }
+
+/* ---- themes ---- */
+
+.themes {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 32px;
+    margin-top: 40px;
+    align-items: start;
+}
+
+.chips { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+
+.chip {
+    display: grid;
+    grid-template-columns: 1fr 48px;
+    gap: 10px;
+    align-items: stretch;
+    padding: 0 0 0 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 0.2s var(--ease), border-color 0.15s;
+}
+
+.chip:hover { transform: translateY(-2px); }
+.chip[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip .label { padding: 10px 0; }
+.chip .swatches { display: flex; margin-top: 8px; height: 6px; }
+.chip img { width: 100%; height: 100%; object-fit: cover; }
+.chip .swatches span { flex: 1; }
+
+.json {
+    padding: 16px 18px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-size: 12px;
+    line-height: 1.75;
+    white-space: pre;
+    overflow-x: auto;
+    transition: background-color 0.4s;
+}
+
+.json .k { color: var(--blue); }
+.json .p { color: var(--muted); }
+.json .sw {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 8px;
+    vertical-align: -1px;
+    border: 1px solid var(--border);
+}
+
+.toggle {
+    margin-top: 12px;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    font: inherit;
+    cursor: pointer;
+}
+
+.toggle:hover { color: var(--accent); }
+
+/* ---- install ---- */
+
+.install { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 40px; }
+
+.install h3 { color: var(--fgBright); font-size: 13px; margin-bottom: 10px; }
+.install h3 b { color: var(--accent); margin-right: 8px; }
+.install p { color: var(--fg); opacity: 0.85; margin-bottom: 12px; }
+
+pre {
+    padding: 16px 18px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font: inherit;
+    font-size: 12px;
+    overflow-x: auto;
+    transition: background-color 0.4s;
+}
+
+pre .c { color: var(--muted); }
+pre .s { color: var(--green); }
+
+footer {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 28px 0 40px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+}
+
+footer a:hover { color: var(--accent); }
+
+/* ---- lock ---- */
+
+.lock {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s;
+}
+
+.locked .lock { opacity: 1; pointer-events: auto; transition-delay: 0.45s; }
+
+.lock .time {
+    color: var(--fgBright);
+    font-size: clamp(64px, 12vw, 120px);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0.02em;
+}
+
+.lock .date { color: var(--muted); font-size: 15px; margin-top: 12px; }
+
+.lock .field {
+    width: 240px;
+    height: 38px;
+    margin-top: 40px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--accent);
+    background: var(--surface);
+    color: var(--fgBright);
+    letter-spacing: 0.3em;
+}
+
+.lock .field:empty::before { content: "type anything"; color: var(--muted); letter-spacing: 0; }
+.lock small { margin-top: 12px; color: var(--muted); }
+
+/* ---- small screens ---- */
+
+@media (max-width: 860px) {
+    .panels, .themes, .install { grid-template-columns: 1fr; }
+    .edges { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+    .edges button { grid-template-columns: 34px 1fr; }
+    .edges kbd { display: none; }
+}
+
+@media (max-width: 600px) {
+    :root { --strip: 5px; --bar: 32px; }
+    main { width: calc(100% - 32px); }
+    section { padding: 64px 0; }
+    .workspaces a.active span, .status .label { display: none; }
+    .bar { padding: 0 calc(var(--strip) + 2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+    .screen { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+    <nav class="workspaces" aria-label="Sections">
+        <a href="#top" class="active">1<span>frameshell</span></a>
+        <a href="#demo">2<span>demo</span></a>
+        <a href="#panels">3<span>panels</span></a>
+        <a href="#themes">4<span>themes</span></a>
+        <a href="#install">5<span>install</span></a>
+    </nav>
+    <div class="clock" id="clock">--:--</div>
+    <div class="status">
+        <button id="theme-button" title="Next theme (t)"><span class="dot"></span><span class="label" id="theme-name">dracula</span></button>
+        <button id="lock-button" title="Lock (l)" aria-label="Lock">
+            <svg viewBox="0 0 16 16"><path d="M8 1a4 4 0 0 0-4 4v2H3v8h10V7h-1V5a4 4 0 0 0-4-4Zm-2.5 4a2.5 2.5 0 0 1 5 0v2h-5V5Z"/></svg>
+        </button>
+        <a href="https://github.com/zenodea/frameshell" aria-label="GitHub">
+            <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        </a>
+    </div>
+</header>
+
+<div class="wall" id="wall"><div style="background-image: url(wallpapers/dracula.webp)"></div></div>
+
+<div class="screen" id="screen">
+<main>
+
+    <section class="hero" id="top">
+        <p class="prompt"><span class="user">~</span> <span class="cmd">qs -c frameshell</span> <span class="cursor"></span></p>
+        <h1>frame<span class="tail">shell</span></h1>
+        <p class="tagline">
+            A desktop shell for <a href="https://hyprland.org">Hyprland</a>, built on
+            <a href="https://quickshell.org">Quickshell</a>. <em>A frame wraps the screen and
+            everything opens out of it.</em>
+        </p>
+        <div class="actions">
+            <button class="copy" data-copy="git clone https://github.com/zenodea/frameshell ~/.config/quickshell/frameshell">
+                <code>git clone https://github.com/zenodea/frameshell ~/.config/quickshell/frameshell</code>
+                <span class="hint">copy</span>
+            </button>
+            <a class="button" href="https://github.com/zenodea/frameshell">GitHub</a>
+        </div>
+        <p class="keys">
+            <span><kbd>t</kbd> next theme</span>
+            <span><kbd>l</kbd> lock</span>
+            <span><kbd>d</kbd> <kbd>c</kbd> <kbd>a</kbd> open a panel</span>
+        </p>
+    </section>
+
+    <section id="demo">
+        <p class="eyebrow"><b>02</b> demo</p>
+        <h2>Bar on top. Drawer on the left.<br>Controls on the right. Launcher below.</h2>
+        <p class="lede">Every panel grows out of the same frame instead of floating over the desktop, so the screen
+            always has one shape.</p>
+        <div class="window">
+            <div class="window-bar"><span>demo.mp4</span><span>0:33</span></div>
+            <video src="assets/demo.mp4" poster="demo-poster.webp" autoplay muted loop playsinline controls preload="metadata"></video>
+        </div>
+    </section>
+
+    <section id="panels">
+        <p class="eyebrow"><b>03</b> panels</p>
+        <h2>Everything opens out of the frame.</h2>
+        <p class="lede">Each edge owns a panel. Bind them in Hyprland, or call them over IPC.</p>
+        <div class="panels">
+            <ul class="edges" role="tablist" id="edges"></ul>
+            <div class="detail">
+                <div class="window">
+                    <div class="window-bar"><span id="shot-ipc">qs ipc call shell</span><span id="shot-edge"></span></div>
+                    <div class="shots" id="shots"></div>
+                </div>
+                <p class="caption" id="caption"></p>
+            </div>
+        </div>
+    </section>
+
+    <section id="themes">
+        <p class="eyebrow"><b>04</b> themes</p>
+        <h2>A theme is twelve colours.</h2>
+        <p class="lede">Fourteen come bundled, each with a light variant. Copy one into
+            <code>~/.config/frameshell/themes/</code> to make your own, and hooks can retheme the rest of
+            your desktop with it. Pick one to repaint this page.</p>
+        <div class="themes">
+            <div>
+                <div class="chips" id="chips"></div>
+                <button class="toggle" id="variant">◐ show light variants</button>
+            </div>
+            <div class="json" id="json"></div>
+        </div>
+    </section>
+
+    <section id="install">
+        <p class="eyebrow"><b>05</b> install</p>
+        <h2>Clone it, start it, bind it.</h2>
+        <p class="lede">Needs Hyprland, Quickshell 0.3 or newer and a Nerd Font. Everything else is optional:
+            a feature hides itself when its tool is missing.</p>
+        <div class="install">
+            <div>
+                <h3><b>1</b>Clone and run</h3>
+                <pre><span class="c"># into your quickshell config folder</span>
+git clone https://github.com/zenodea/frameshell \
+    ~/.config/quickshell/frameshell
+qs -c frameshell</pre>
+            </div>
+            <div>
+                <h3><b>2</b>Bind the panels</h3>
+                <pre><span class="c"># ~/.config/hypr/hyprland.conf</span>
+exec-once = qs -c frameshell -d
+
+bind = SUPER, Space, exec, <span class="s">qs -c frameshell ipc call shell launcher apps</span>
+bind = SUPER, D, exec, <span class="s">qs -c frameshell ipc call shell drawer dashboard</span>
+bind = SUPER, C, exec, <span class="s">qs -c frameshell ipc call shell controls</span>
+bind = SUPER, A, exec, <span class="s">qs -c frameshell ipc call shell agent</span>
+bind = SUPER, L, exec, <span class="s">qs -c frameshell ipc call shell lock</span></pre>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <span>MIT · inspired by <a href="https://github.com/caelestia-dots/shell">caelestia</a></span>
+        <span><a href="https://github.com/zenodea/frameshell">github.com/zenodea/frameshell</a></span>
+    </footer>
+
+</main>
+</div>
+
+<div class="lock" id="lock" aria-hidden="true">
+    <div class="time" id="lock-time">--:--</div>
+    <div class="date" id="lock-date"></div>
+    <div class="field" id="lock-field"></div>
+    <small>enter to unlock</small>
+</div>
+
+<script>
+const root = document.documentElement;
+const screen = document.getElementById("screen");
+
+// ---- clock ----
+
+function tick() {
+    const now = new Date();
+    const time = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    document.getElementById("clock").textContent = time;
+    document.getElementById("lock-time").textContent = time;
+    document.getElementById("lock-date").textContent =
+        now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+}
+tick();
+setInterval(tick, 1000);
+
+// the frame opens over the page on load
+requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("booting")));
+
+// ---- workspaces follow the scroll position ----
+
+const links = [...document.querySelectorAll(".workspaces a")];
+const observer = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        links.forEach(a => a.classList.toggle("active", a.hash === "#" + entry.target.id));
+    }
+}, { root: screen, rootMargin: "-45% 0px -50% 0px" });
+document.querySelectorAll("section").forEach(s => observer.observe(s));
+
+// ---- copy ----
+
+document.querySelectorAll("[data-copy]").forEach(button => {
+    button.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(button.dataset.copy);
+            button.classList.add("done");
+            button.querySelector(".hint").textContent = "copied";
+            setTimeout(() => {
+                button.classList.remove("done");
+                button.querySelector(".hint").textContent = "copy";
+            }, 1600);
+        } catch {}
+    });
+});
+
+// ---- panels ----
+
+const PANELS = [
+    { key: "b", name: "bar", where: "top", edge: "t", shot: "desktop", ipc: "", bind: "",
+      text: "Workspaces, clock, volume, brightness, VPN, Wi-Fi, Bluetooth and battery. It hides for fullscreen windows." },
+    { key: "d", name: "drawer", where: "left", edge: "l", shot: "dashboard", ipc: "drawer dashboard", bind: "D",
+      text: "A dashboard with weather, notifications, system stats and a calendar, then tabs for open windows and clipboard history." },
+    { key: "c", name: "controls", where: "right", edge: "r", shot: "control-center", ipc: "controls", bind: "C",
+      text: "Audio, Wi-Fi, Bluetooth, Mullvad, power profiles, charge limit, keep awake, night mode, screenshots and screen recording." },
+    { key: "a", name: "agent", where: "right, second tab", edge: "r", shot: "agent", ipc: "agent", bind: "A",
+      text: "A chat with Claude Code or Codex, whichever is installed, with tool approvals shown in the panel and saved sessions." },
+    { key: "s", name: "launcher", where: "bottom", edge: "b", shot: "theme-picker", ipc: "launcher themes", bind: "Space",
+      text: "Apps, themes, fonts, wallpapers and the session menu, in one strip along the bottom." },
+    { key: "", name: "lock", where: "everywhere", edge: "f", shot: "lock", ipc: "lock", bind: "L",
+      text: "The same frame closing over the desktop. Press l anywhere on this page to try it." },
+];
+
+const edges = document.getElementById("edges");
+const shots = document.getElementById("shots");
+
+PANELS.forEach((p, i) => {
+    const li = document.createElement("li");
+    li.innerHTML = `
+        <button role="tab" data-edge="${p.edge}" aria-selected="false">
+            <span class="map"><i class="t"></i><i class="l"></i><i class="r"></i><i class="b"></i><i class="f"></i></span>
+            <span class="name">${p.name}<span class="where">${p.where}</span></span>
+            ${p.bind ? `<kbd>${p.bind}</kbd>` : ""}
+        </button>`;
+    li.querySelector("button").addEventListener("click", () => showPanel(i));
+    edges.append(li);
+
+    const img = document.createElement("img");
+    img.src = `assets/screenshots/${p.shot}.webp`;
+    img.alt = `frameshell ${p.name}`;
+    img.loading = "lazy";
+    shots.append(img);
+});
+
+function showPanel(i) {
+    const p = PANELS[i];
+    edges.querySelectorAll("button").forEach((b, j) => b.setAttribute("aria-selected", i === j));
+    shots.querySelectorAll("img").forEach((img, j) => img.classList.toggle("on", i === j));
+    document.getElementById("caption").textContent = p.text;
+    document.getElementById("shot-ipc").textContent = p.ipc ? `qs ipc call shell ${p.ipc}` : "always there";
+    document.getElementById("shot-edge").textContent = p.bind ? `SUPER ${p.bind}` : "";
+}
+showPanel(0);
+
+// ---- themes ----
+
+let themes = {};
+let current = "dracula";
+let light = false;
+const KEYS = ["bg", "surface", "muted", "fg", "fgBright", "accent", "blue", "red", "green", "yellow", "orange", "purple"];
+
+const families = () => Object.keys(themes).filter(n => !n.endsWith("-light"));
+const resolve = name => light && themes[name + "-light"] ? name + "-light" : name;
+
+// ---- wallpaper: each theme brings its own, wiped in over the old one ----
+
+const wall = document.getElementById("wall");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
+let wallpaper = "dracula";
+
+function setWallpaper(name, animate) {
+    if (name === wallpaper) return;
+    wallpaper = name;
+    const url = `wallpapers/${name}.webp`;
+    const img = new Image();
+    img.src = url;
+    img.decode().catch(() => {}).then(() => {
+        if (wallpaper !== name) return;
+        const layer = document.createElement("div");
+        layer.style.backgroundImage = `url(${url})`;
+        const settle = () => { while (wall.firstChild !== layer) wall.firstChild.remove(); };
+        if (animate && !reduceMotion.matches) {
+            layer.className = "wipe";
+            layer.addEventListener("animationend", settle, { once: true });
+            wall.append(layer);
+        } else {
+            wall.append(layer);
+            settle();
+        }
+    });
+}
+
+function applyTheme(name, animate = true) {
+    const t = themes[resolve(name)];
+    if (!t) return;
+    current = name;
+    setWallpaper(resolve(name), animate);
+    for (const k of KEYS) root.style.setProperty("--" + k, t[k]);
+    root.style.colorScheme = light ? "light" : "dark";
+    document.getElementById("theme-name").textContent = resolve(name);
+    document.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", c.dataset.name === name));
+    document.getElementById("json").innerHTML =
+        `<span class="p">// themes/${resolve(name)}.json</span>\n<span class="p">{</span>\n` +
+        KEYS.map((k, i) => `    <span class="k">"${k}"</span><span class="p">:</span> ` +
+            `<span class="sw" style="background:${t[k]}"></span>"${t[k]}"${i < KEYS.length - 1 ? '<span class="p">,</span>' : ""}`).join("\n") +
+        `\n<span class="p">}</span>`;
+    try { localStorage.setItem("frameshell-theme", JSON.stringify({ name, light })); } catch {}
+}
+
+function renderChips() {
+    const chips = document.getElementById("chips");
+    chips.innerHTML = "";
+    for (const name of families()) {
+        const t = themes[resolve(name)];
+        const chip = document.createElement("button");
+        chip.className = "chip";
+        chip.dataset.name = name;
+        chip.style.background = t.bg;
+        chip.style.color = t.fg;
+        chip.innerHTML = `<span class="label">${name}<span class="swatches">${
+            ["accent", "blue", "green", "yellow", "orange", "red", "purple"].map(k => `<span style="background:${t[k]}"></span>`).join("")
+        }</span></span><img src="wallpapers/thumbs/${resolve(name)}.webp" alt="" loading="lazy">`;
+        chip.addEventListener("click", () => applyTheme(name));
+        chips.append(chip);
+    }
+    document.getElementById("variant").textContent = light ? "◐ show dark variants" : "◐ show light variants";
+}
+
+function cycleTheme(step = 1) {
+    const list = families();
+    applyTheme(list[(list.indexOf(current) + step + list.length) % list.length]);
+}
+
+function toggleVariant() {
+    light = !light;
+    renderChips();
+    applyTheme(current);
+}
+
+document.getElementById("theme-button").addEventListener("click", e => cycleTheme(e.shiftKey ? -1 : 1));
+document.getElementById("variant").addEventListener("click", toggleVariant);
+
+fetch("themes.json").then(r => r.json()).then(data => {
+    themes = data;
+    try {
+        const saved = JSON.parse(localStorage.getItem("frameshell-theme"));
+        if (saved && themes[saved.name]) { current = saved.name; light = !!saved.light; }
+    } catch {}
+    renderChips();
+    applyTheme(current, false);
+}).catch(() => {
+    document.getElementById("themes").hidden = true;
+    document.getElementById("theme-button").hidden = true;
+});
+
+// ---- lock ----
+
+const field = document.getElementById("lock-field");
+
+function lock() {
+    field.textContent = "";
+    root.classList.add("locked");
+    document.getElementById("lock").setAttribute("aria-hidden", "false");
+}
+
+function unlock() {
+    root.classList.remove("locked");
+    document.getElementById("lock").setAttribute("aria-hidden", "true");
+}
+
+document.getElementById("lock-button").addEventListener("click", lock);
+document.getElementById("lock").addEventListener("click", unlock);
+
+// ---- keys ----
+
+document.addEventListener("keydown", e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (root.classList.contains("locked")) {
+        e.preventDefault();
+        if (e.key === "Enter" || e.key === "Escape") unlock();
+        else if (e.key === "Backspace") field.textContent = field.textContent.slice(0, -1);
+        else if (e.key.length === 1 && field.textContent.length < 16) field.textContent += "•";
+        return;
+    }
+
+    const key = e.key.toLowerCase();
+    if (key === "t") cycleTheme(e.shiftKey ? -1 : 1);
+    else if (key === "l") lock();
+    else {
+        const i = PANELS.findIndex(p => p.key && p.key === key);
+        if (i < 0) return;
+        showPanel(i);
+        document.getElementById("panels").scrollIntoView();
+    }
+});
+</script>
+</body>
+</html>
