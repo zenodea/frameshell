@@ -1,20 +1,22 @@
 #!/bin/sh
-# Assembles the landing page into _site/ (or $1) for GitHub Pages.
+# Assembles the landing page into _site/ next to this script (or into $1).
 set -e
-cd "$(dirname "$0")/.."
-out=${1:-_site}
+here=$(cd "$(dirname "$0")" && pwd)
+repo=$(cd "$here/../.." && pwd)
+out=${1:-$here/_site}
 
 rm -rf "$out"
-mkdir -p "$out"
-cp site/index.html site/*.webp "$out/"
-cp -R site/wallpapers "$out/wallpapers"
-cp -R assets "$out/assets"
+mkdir -p "$out/assets"
+cp "$here/index.html" "$here"/*.webp "$out/"
+cp -R "$here/wallpapers" "$out/wallpapers"
+cp "$repo/assets/demo.mp4" "$out/assets/"
+cp -R "$repo/assets/screenshots" "$out/assets/screenshots"
 
 # every bundled theme in one file, keyed by name
 {
     printf '{'
     sep=
-    for f in themes/*.json; do
+    for f in "$repo"/themes/*.json; do
         printf '%s"%s":' "$sep" "$(basename "$f" .json)"
         tr -d '\n' < "$f"
         sep=,
