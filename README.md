@@ -153,7 +153,7 @@ in the panel. `Ctrl S` opens its settings, `Ctrl H` the session history and
 | `themes/` | the bundled colour themes |
 | `examples/` | Hyprland and hypridle snippets |
 | `assets/` | the demo clip, screenshots and landing page |
-| `assets/landing/` | the landing page; `build.sh` assembles it into `_site/` for Vercel |
+| `assets/landing/` | the landing page; `build.sh` assembles it into `_site/` for GitHub Pages |
 
 ## Where things are kept
 

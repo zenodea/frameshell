@@ -1,4 +1,0 @@
-{
-    "buildCommand": "sh build.sh",
-    "outputDirectory": "_site"
-}
